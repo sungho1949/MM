@@ -7,7 +7,7 @@ const Graph = require("./dijkstra");
 
 // 경로 계산 및 사용자에게 선택지 제공
 router.post("/searchRoutes", async (req, res) => {
-  const { startStation, endStation } = req.body;
+  const { userId, startStation, endStation } = req.body;
 
   try {
     // 그래프 객체 생성
@@ -32,16 +32,47 @@ router.post("/searchRoutes", async (req, res) => {
       graph.addEdge(startStation, endStation, time, distance, cost);
     });
 
-    // 최소 시간 경로 계산
+    // 최소 시간, 최단 거리, 최소 비용 경로 계산
     const shortestTimePath = graph.findShortestPath(startStation, endStation, "time");
-
-    // 최단 거리 경로 계산
     const shortestDistancePath = graph.findShortestPath(startStation, endStation, "distance");
-
-    // 최소 비용 경로 계산
     const lowestCostPath = graph.findShortestPath(startStation, endStation, "cost");
 
-    // 결과를 사용자에게 제공
+    // 사용 기록 업데이트
+    const usageRef = db.collection("UsageHistory").doc(`${userId}_${startStation}_${endStation}`);
+    const usageDoc = await usageRef.get();
+
+    if (usageDoc.exists) {
+      // 기존 사용 기록이 있는 경우
+      const usageData = usageDoc.data();
+      const newCount = usageData.count + 1;
+
+      // 사용 횟수 업데이트
+      await usageRef.update({ count: newCount });
+
+      // 사용 횟수가 5번 이상이면 즐겨찾기에 추가
+      if (newCount >= 5) {
+        const favoritesRef = db.collection("Favorites").doc(userId);
+        const favoritesDoc = await favoritesRef.get();
+
+        if (favoritesDoc.exists) {
+          const favoritesData = favoritesDoc.data();
+          if (!favoritesData.routes.some(route => route.startStation === startStation && route.endStation === endStation)) {
+            await favoritesRef.update({
+              routes: admin.firestore.FieldValue.arrayUnion({ startStation, endStation })
+            });
+          }
+        } else {
+          await favoritesRef.set({
+            routes: [{ startStation, endStation }]
+          });
+        }
+      }
+    } else {
+      // 사용 기록이 없는 경우 새로 생성
+      await usageRef.set({ userId, startStation, endStation, count: 1 });
+    }
+
+    // 사용자에게 경로 제공
     const routes = [
       {
         criteria: "time",
@@ -64,17 +95,6 @@ router.post("/searchRoutes", async (req, res) => {
   } catch (error) {
     res.status(500).send("Error calculating routes: " + error.message);
   }
-});
-
-// 사용자가 선택한 경로에 대한 세부 정보 제공
-router.post("/selectRoute", (req, res) => {
-  const { selectedRoute } = req.body;
-
-  // 선택한 경로의 정보를 제공 (세부 정보 출력, 예를 들어 경로 시각화 등)
-  res.status(200).json({
-    message: "Route selected",
-    route: selectedRoute,
-  });
 });
 
 module.exports = router;
