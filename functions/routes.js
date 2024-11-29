@@ -3,48 +3,78 @@ const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
 const db = admin.firestore();
-const dijkstra = require("./utils/dijkstra");
+const Graph = require("./dijkstra");
 
-// 최단 경로 검색 API
-router.get("/shortest/:startStation/:endStation", async (req, res) => {
-  const { startStation, endStation } = req.params;
+// 경로 계산 및 사용자에게 선택지 제공
+router.post("/searchRoutes", async (req, res) => {
+  const { startStation, endStation } = req.body;
 
   try {
-    // 모든 연결 정보 가져오기
-    const snapshot = await db.collection("Connections").get();
-    if (snapshot.empty) {
-      return res.status(404).send("No connections found");
+    // 그래프 객체 생성
+    const graph = new Graph();
+
+    // 모든 역과 연결 정보 가져오기
+    const stationsSnapshot = await db.collection("Stations").get();
+    const connectionsSnapshot = await db.collection("Connections").get();
+
+    if (stationsSnapshot.empty || connectionsSnapshot.empty) {
+      return res.status(404).send("No stations or connections found");
     }
 
-    // 그래프 데이터를 생성하기 위해 모든 연결을 배열에 추가
-    const connections = snapshot.docs.map(doc => doc.data());
+    // 역 추가
+    stationsSnapshot.docs.forEach(doc => {
+      graph.addNode(doc.id);
+    });
 
-    // 다익스트라 알고리즘을 사용해 최단 경로 계산
-    const shortestPath = dijkstra.findShortestPath(connections, startStation, endStation);
+    // 연결 정보 추가
+    connectionsSnapshot.docs.forEach(doc => {
+      const { startStation, endStation, time, distance, cost } = doc.data();
+      graph.addEdge(startStation, endStation, time, distance, cost);
+    });
 
-    if (!shortestPath) {
-      return res.status(404).send("No route found between the stations");
-    }
+    // 최소 시간 경로 계산
+    const shortestTimePath = graph.findShortestPath(startStation, endStation, "time");
 
-    res.status(200).json(shortestPath);
+    // 최단 거리 경로 계산
+    const shortestDistancePath = graph.findShortestPath(startStation, endStation, "distance");
+
+    // 최소 비용 경로 계산
+    const lowestCostPath = graph.findShortestPath(startStation, endStation, "cost");
+
+    // 결과를 사용자에게 제공
+    const routes = [
+      {
+        criteria: "time",
+        path: shortestTimePath.path,
+        distance: shortestTimePath.distance,
+      },
+      {
+        criteria: "distance",
+        path: shortestDistancePath.path,
+        distance: shortestDistancePath.distance,
+      },
+      {
+        criteria: "cost",
+        path: lowestCostPath.path,
+        distance: lowestCostPath.distance,
+      },
+    ];
+
+    res.status(200).json(routes);
   } catch (error) {
-    res.status(500).send("Error fetching shortest route: " + error.message);
+    res.status(500).send("Error calculating routes: " + error.message);
   }
 });
 
-// 모든 경로 조회 API
-router.get("/all", async (req, res) => {
-  try {
-    const snapshot = await db.collection("Connections").get();
-    if (snapshot.empty) {
-      return res.status(404).send("No routes found");
-    }
+// 사용자가 선택한 경로에 대한 세부 정보 제공
+router.post("/selectRoute", (req, res) => {
+  const { selectedRoute } = req.body;
 
-    const routes = snapshot.docs.map(doc => doc.data());
-    res.status(200).json(routes);
-  } catch (error) {
-    res.status(500).send("Error fetching routes: " + error.message);
-  }
+  // 선택한 경로의 정보를 제공 (세부 정보 출력, 예를 들어 경로 시각화 등)
+  res.status(200).json({
+    message: "Route selected",
+    route: selectedRoute,
+  });
 });
 
 module.exports = router;
