@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const admin = require("firebase-admin");
 const db = admin.firestore();
-const Graph = require("./dijkstra");
+const Graph = require("./utils/dijkstra");
 
 // 경로 계산 및 사용자에게 선택지 제공
 router.post("/searchRoutes", async (req, res) => {
