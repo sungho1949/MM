@@ -1,24 +1,34 @@
-// functions/index.js
+// MM/functions/index.js
+
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const express = require("express");
 const app = express();
 
-// Firebase Admin 초기화
-admin.initializeApp();
-const db = admin.firestore();
+// Firebase Admin 초기화 (프로젝트 전체에서 한 번만 수행)
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 
-// 라우트 파일 불러오기
-const routes = require("./routes");
-const stations = require("./stations");
-const users = require("./users");
-const favorites = require("./favorites");
+// 컨트롤러 불러오기
+const stationsController = require("./controllers/stationsController");
+const usersController = require("./controllers/usersController");
+const routesController = require("./controllers/routesController");
 
-// 라우터 연결
-app.use("/api/routes", routes);
-app.use("/api/stations", stations);
-app.use("/api/users", users);
-app.use("/api/favorites", favorites);
+// 미들웨어 설정
+app.use(express.json());
 
-// Firebase Function Export (v1 방식 사용)
+// 라우트 설정
+app.post("/api/stations/add", stationsController.addStation);
+app.post("/api/stations/connect", stationsController.connectStations);
+app.get("/api/stations/:stationID", stationsController.getStationInfo);
+app.get("/api/stations/route/:startStation/:endStation", stationsController.getRoute);
+
+app.post("/api/users/register", usersController.register);
+app.post("/api/users/login", usersController.login);
+app.get("/api/users/profile/:uid", usersController.getProfile);
+
+app.post("/api/routes/searchRoutes", routesController.handleRouteSelection);
+
+// Firebase Function Export
 exports.api = functions.https.onRequest(app);
