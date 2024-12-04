@@ -5,6 +5,7 @@ const admin = require("firebase-admin");
 const express = require("express");
 const app = express();
 
+
 // Firebase Admin 초기화 (프로젝트 전체에서 한 번만 수행)
 if (!admin.apps.length) {
     admin.initializeApp();
