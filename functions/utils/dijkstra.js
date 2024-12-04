@@ -1,4 +1,4 @@
-// dijkstra.js
+// MM/functions/utils/dijkstra.js
 
 class Graph {
   constructor() {
@@ -6,16 +6,19 @@ class Graph {
     this.edges = new Map();
   }
 
+  // 노드 추가하기
   addNode(node) {
     this.nodes.add(node);
     this.edges.set(node, []);
   }
 
+  // 엣지 추가하기 (양방향 그래프)
   addEdge(start, end, time, distance, cost) {
     this.edges.get(start).push({ node: end, time, distance, cost });
-    this.edges.get(end).push({ node: start, time, distance, cost }); // 양방향 그래프
+    this.edges.get(end).push({ node: start, time, distance, cost });
   }
 
+  // 다익스트라 알고리즘을 이용한 최단 경로 찾기
   findShortestPath(start, end, criteria) {
     const distances = new Map();
     const previous = new Map();
