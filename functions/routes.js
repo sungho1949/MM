@@ -1,27 +1,16 @@
-// MM/functions/routes.js
-
-// MM/functions/routes.js
-
 const express = require("express");
 const router = express.Router();
 
 // 컨트롤러 불러오기
-const stationsController = require("../controllers/stationsController");
-const usersController = require("../controllers/usersController");
-const routesController = require("../controllers/routesController");
+const stationsController = require("./controllers/stationsController");
+const routesController = require("./controllers/routesController");
 
 // 역 관련 라우트
-router.post("/stations/add", stationsController.addStation);
-router.post("/stations/connect", stationsController.connectStations);
-router.get("/stations/:stationID", stationsController.getStationInfo);
-router.get("/stations/route/:startStation/:endStation", stationsController.getRoute);
-
-// 사용자 관련 라우트
-router.post("/users/register", usersController.register);
-router.post("/users/login", usersController.login);
-router.get("/users/profile/:uid", usersController.getProfile);
+router.get("/stations/:stationID", stationsController.getStationInfo); // 특정 역 정보 조회
+router.get("/stations/route/:startStation/:endStation", stationsController.getRoute); // 두 역 간 경로 조회
 
 // 경로 관련 라우트
-router.post("/routes/search", routesController.searchRoutes);
+router.post("/routes/searchOptimalRoute", routesController.searchOptimalRoute); // 최적 경로 검색
+router.post("/routes/selectOptimalRoute", routesController.selectOptimalRoute); // 선택된 경로를 처리하는 새로운 API 엔드포인트 추가
 
 module.exports = router;

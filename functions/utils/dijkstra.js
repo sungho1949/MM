@@ -1,40 +1,37 @@
-// MM/functions/utils/dijkstra.js
-
 class Graph {
   constructor() {
     this.nodes = new Set();
     this.edges = new Map();
+    this.stationLines = new Map(); // 역의 노선 정보를 저장
   }
 
-  // 노드 추가하기
-  addNode(node) {
+  // 노드를 그래프에 추가
+  addNode(node, lines) {
     this.nodes.add(node);
     this.edges.set(node, []);
+    this.stationLines.set(node, lines); // 노선 정보 추가
   }
 
-  // 엣지 추가하기 (양방향 그래프)
+  // 두 노드 간의 엣지를 추가 (양방향)
   addEdge(start, end, time, distance, cost) {
     this.edges.get(start).push({ node: end, time, distance, cost });
     this.edges.get(end).push({ node: start, time, distance, cost });
   }
 
-  // 다익스트라 알고리즘을 이용한 최단 경로 찾기
+  // 다익스트라 알고리즘으로 최적 경로를 찾음 (환승 가중치 포함)
   findShortestPath(start, end, criteria) {
     const distances = new Map();
     const previous = new Map();
     const queue = new Set(this.nodes);
 
-    // 모든 거리를 무한대로 초기화, 시작 노드는 0으로 설정
     this.nodes.forEach(node => distances.set(node, Infinity));
     distances.set(start, 0);
 
     while (queue.size > 0) {
-      // 현재 거리에서 가장 짧은 노드를 선택
       const current = [...queue].reduce((minNode, node) =>
         distances.get(node) < distances.get(minNode) ? node : minNode
       );
 
-      // 종료 노드에 도달했다면 경로를 반환
       if (current === end) {
         const path = [];
         let temp = end;
@@ -45,13 +42,20 @@ class Graph {
         return { path, distance: distances.get(end) };
       }
 
-      // 현재 노드를 큐에서 제거
       queue.delete(current);
 
-      // 인접 노드를 순회하며 거리 계산
       this.edges.get(current).forEach(neighbor => {
-        const weight = neighbor[criteria]; // 선택한 기준의 가중치 사용 (time, distance, cost)
-        const alt = distances.get(current) + weight;
+        const weight = neighbor[criteria];
+        const currentLines = this.stationLines.get(current);
+        const nextLines = this.stationLines.get(neighbor.node);
+
+        // 환승 가중치 추가 (다른 노선으로 환승 시 가중치를 증가)
+        let transferWeight = 0;
+        if (!currentLines.some(line => nextLines.includes(line))) {
+          transferWeight = 5; // 환승 가중치 (5를 임의로 설정, 필요에 따라 조정 가능)
+        }
+
+        const alt = distances.get(current) + weight + transferWeight;
         if (alt < distances.get(neighbor.node)) {
           distances.set(neighbor.node, alt);
           previous.set(neighbor.node, current);
@@ -59,9 +63,6 @@ class Graph {
       });
     }
 
-    // 도달할 수 없는 경우 null 반환
     return null;
   }
 }
-
-module.exports = Graph;

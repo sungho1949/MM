@@ -1,51 +1,44 @@
 // MM/functions/services/stationsService.js
 
-const stationsDao = require("../dao/stationsDao");
+const { db } = require("../firebaseConfig");
+const Graph = require("../utils/dijkstra");
 
-// 역 정보 추가하기
-exports.addStation = async ({ stationID, stationName, line }) => {
-  try {
-    if (!stationID || !stationName || !line) {
-      throw new Error("Missing station information");
-    }
-    return await stationsDao.addStation({ stationID, stationName, line });
-  } catch (error) {
-    throw new Error(`Error adding station: ${error.message}`);
-  }
-};
-
-// 두 역 간 연결 정보 추가하기
-exports.connectStations = async ({ startStation, endStation, time, distance, cost }) => {
-  try {
-    if (!startStation || !endStation || !time || !distance || !cost) {
-      throw new Error("Missing connection information");
-    }
-    return await stationsDao.connectStations({ startStation, endStation, time, distance, cost });
-  } catch (error) {
-    throw new Error(`Error adding connection: ${error.message}`);
-  }
-};
-
-// 특정 역 정보 조회하기
+// 특정 역 정보를 Firestore에서 조회
 exports.getStationInfo = async (stationID) => {
   try {
-    if (!stationID) {
-      throw new Error("Missing station ID");
+    const stationDoc = await db.collection("Stations").doc(stationID).get();
+    if (!stationDoc.exists) {
+      throw new Error("Station not found");
     }
-    return await stationsDao.getStationInfo(stationID);
+    const stationData = stationDoc.data();
+    return stationData; // 노선 정보도 반환
   } catch (error) {
     throw new Error(`Error fetching station: ${error.message}`);
   }
 };
 
-// 두 역 간 경로 조회하기
-exports.getRoute = async (startStation, endStation) => {
+// 환승 지점 확인 로직 추가
+exports.getTransferInfo = async (startStation, endStation) => {
   try {
-    if (!startStation || !endStation) {
-      throw new Error("Missing station information");
+    const startStationInfo = await exports.getStationInfo(startStation);
+    const endStationInfo = await exports.getStationInfo(endStation);
+
+    // 두 역의 노선 비교
+    const startLines = startStationInfo.lines;
+    const endLines = endStationInfo.lines;
+
+    // 두 역이 연결되며 환승 노선인지 확인
+    const commonLines = startLines.filter(line => endLines.includes(line));
+    if (commonLines.length > 0) {
+      return { isTransfer: false }; // 동일 노선
+    } else {
+      return {
+        isTransfer: true,
+        transferFrom: startLines,
+        transferTo: endLines,
+      };
     }
-    return await stationsDao.getRoute(startStation, endStation);
   } catch (error) {
-    throw new Error(`Error fetching route: ${error.message}`);
+    throw new Error(`Error fetching transfer info: ${error.message}`);
   }
 };

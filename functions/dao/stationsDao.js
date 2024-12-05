@@ -1,64 +1,29 @@
 // MM/functions/dao/stationsDao.js
 
-const admin = require("firebase-admin");
-const db = admin.firestore();
+const { db } = require("../firebaseConfig");
 
-// 역 정보 추가하기
-exports.addStation = async ({ stationID, stationName, line }) => {
+// Firestore에 역 정보를 추가하는 함수
+exports.addStation = async ({ stationID, stationName, lines }) => {
   try {
     await db.collection("Stations").doc(stationID).set({
       stationName,
-      line,
+      lines, // 노선 정보 추가
     });
-    return "Station added successfully";
+    return "Station added successfully"; // 성공 메시지 반환
   } catch (error) {
-    throw new Error(`Error adding station: ${error.message}`);
+    throw new Error(`Error adding station: ${error.message}`); // 에러 메시지 처리
   }
 };
 
-// 두 역 간의 연결 정보 추가하기
-exports.connectStations = async ({ startStation, endStation, time, distance, cost }) => {
-  try {
-    await db.collection("Connections").add({
-      startStation,
-      endStation,
-      time,
-      distance,
-      cost,
-    });
-    return "Connection added successfully";
-  } catch (error) {
-    throw new Error(`Error adding connection: ${error.message}`);
-  }
-};
-
-// 특정 역 정보 조회하기
+// 특정 역 정보를 Firestore에서 조회하는 함수
 exports.getStationInfo = async (stationID) => {
   try {
     const stationDoc = await db.collection("Stations").doc(stationID).get();
     if (!stationDoc.exists) {
-      throw new Error("Station not found");
+      throw new Error("Station not found"); // 역이 없으면 에러 반환
     }
-    return stationDoc.data();
+    return stationDoc.data(); // 역 데이터 반환
   } catch (error) {
-    throw new Error(`Error fetching station: ${error.message}`);
-  }
-};
-
-// 두 역 간 경로 조회하기
-exports.getRoute = async (startStation, endStation) => {
-  try {
-    const snapshot = await db.collection("Connections")
-      .where("startStation", "==", startStation)
-      .where("endStation", "==", endStation)
-      .get();
-
-    if (snapshot.empty) {
-      throw new Error("No route found between the stations");
-    }
-
-    return snapshot.docs.map(doc => doc.data());
-  } catch (error) {
-    throw new Error(`Error fetching route: ${error.message}`);
+    throw new Error(`Error fetching station: ${error.message}`); // 에러 메시지 처리
   }
 };
