@@ -2,9 +2,6 @@
   "name": "mm",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -12,5 +9,9 @@
   "dependencies": {
     "firebase-admin": "^13.0.1",
     "firebase-functions": "^6.1.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
   }
 }

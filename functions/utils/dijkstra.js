@@ -2,27 +2,34 @@ class Graph {
   constructor() {
     this.nodes = new Set();
     this.edges = new Map();
-    this.stationLines = new Map(); // 역의 노선 정보를 저장
   }
 
   // 노드를 그래프에 추가
-  addNode(node, lines) {
-    this.nodes.add(node);
-    this.edges.set(node, []);
-    this.stationLines.set(node, lines); // 노선 정보 추가
+  addNode(node) {
+    if (!this.nodes.has(node)) {
+      this.nodes.add(node);
+      this.edges.set(node, []);
+    }
   }
 
   // 두 노드 간의 엣지를 추가 (양방향)
-  addEdge(start, end, time, distance, cost) {
-    this.edges.get(start).push({ node: end, time, distance, cost });
-    this.edges.get(end).push({ node: start, time, distance, cost });
+  addEdge(start, end, time, distance, cost, startLine, endLine) {
+    if (!this.edges.has(start)) {
+      this.addNode(start);
+    }
+    if (!this.edges.has(end)) {
+      this.addNode(end);
+    }
+    this.edges.get(start).push({ node: end, time, distance, cost, startLine, endLine });
+    this.edges.get(end).push({ node: start, time, distance, cost, startLine: endLine, endLine: startLine });
   }
 
-  // 다익스트라 알고리즘으로 최적 경로를 찾음 (환승 가중치 포함)
+  // 다익스트라 알고리즘으로 최적 경로를 찾음
   findShortestPath(start, end, criteria) {
     const distances = new Map();
     const previous = new Map();
     const queue = new Set(this.nodes);
+    const lines = new Map(); // 각 역의 노선 정보 저장
 
     this.nodes.forEach(node => distances.set(node, Infinity));
     distances.set(start, 0);
@@ -46,19 +53,11 @@ class Graph {
 
       this.edges.get(current).forEach(neighbor => {
         const weight = neighbor[criteria];
-        const currentLines = this.stationLines.get(current);
-        const nextLines = this.stationLines.get(neighbor.node);
-
-        // 환승 가중치 추가 (다른 노선으로 환승 시 가중치를 증가)
-        let transferWeight = 0;
-        if (!currentLines.some(line => nextLines.includes(line))) {
-          transferWeight = 5; // 환승 가중치 (5를 임의로 설정, 필요에 따라 조정 가능)
-        }
-
-        const alt = distances.get(current) + weight + transferWeight;
+        const alt = distances.get(current) + weight;
         if (alt < distances.get(neighbor.node)) {
           distances.set(neighbor.node, alt);
           previous.set(neighbor.node, current);
+          lines.set(neighbor.node, neighbor.endLine);
         }
       });
     }
@@ -66,3 +65,5 @@ class Graph {
     return null;
   }
 }
+
+module.exports = Graph;

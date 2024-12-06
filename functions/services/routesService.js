@@ -1,3 +1,5 @@
+// routesService.js
+
 const Graph = require("../utils/dijkstra");
 const { db } = require("../firebaseConfig");
 
@@ -26,6 +28,30 @@ exports.getOptimalRoute = async (startStation, endStation, criteria) => {
       throw new Error("No optimal route found");
     }
 
+    // 환승 정보 추가
+    const transfers = [];
+    for (let i = 1; i < optimalRoute.path.length; i++) {
+      const prevStation = optimalRoute.path[i - 1];
+      const currentStation = optimalRoute.path[i];
+
+      // Firestore에서 각 역의 노선 정보 가져오기
+      const prevStationDoc = await db.collection("Stations").doc(prevStation).get();
+      const currentStationDoc = await db.collection("Stations").doc(currentStation).get();
+
+      if (prevStationDoc.exists && currentStationDoc.exists) {
+        const prevLines = prevStationDoc.data().lines;
+        const currentLines = currentStationDoc.data().lines;
+
+        // 환승 발생 여부 확인
+        const isTransfer = !prevLines.some(line => currentLines.includes(line));
+        if (isTransfer) {
+          transfers.push(currentStation);
+        }
+      }
+    }
+
+    optimalRoute.transfers = transfers;
+
     return optimalRoute;
   } catch (error) {
     throw new Error(`Error calculating optimal route: ${error.message}`);
@@ -35,6 +61,11 @@ exports.getOptimalRoute = async (startStation, endStation, criteria) => {
 // 사용자가 선택한 경로를 Firestore에 저장
 exports.storeUserSelectedRoute = async (userId, selectedRoute) => {
   try {
+
+    if (!selectedRoute.path || !Array.isArray(selectedRoute.path) || selectedRoute.path.length === 0) {
+      throw new Error("Invalid selected route: Path is missing or invalid");
+    }
+    
     await db.collection("UserSelectedRoutes").doc(userId).set({
       selectedRoute,
       timestamp: new Date().toISOString()
@@ -49,14 +80,14 @@ exports.provideRouteGuidance = async (userId, selectedRoute) => {
   try {
     // 예시: Firebase Cloud Messaging을 사용한 알림
     const messaging = require("../firebaseConfig").messaging;
-    
+
     // 경로의 모든 역을 순회하며 알림을 제공하거나, 환승 전역, 도착 전역에서만 알림 제공 가능
     for (let i = 0; i < selectedRoute.path.length - 1; i++) {
       const currentStation = selectedRoute.path[i];
       const nextStation = selectedRoute.path[i + 1];
 
       // 환승 정보가 있을 경우 알림 추가
-      const isTransfer = selectedRoute.transfers && selectedRoute.transfers.includes(currentStation);
+      const isTransfer = selectedRoute.transfers && selectedRoute.transfers.includes(nextStation);
 
       const message = {
         notification: {

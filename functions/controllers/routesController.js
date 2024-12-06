@@ -10,6 +10,11 @@ exports.searchOptimalRoute = async (req, res) => {
     }
 
     const result = await routesService.getOptimalRoute(startStation, endStation, criteria);
+
+    if (!result || !result.path) {
+      return res.status(404).send("No route found");
+    }
+    
     res.status(200).json(result);
   } catch (error) {
     console.error("Error searching optimal route:", error.message);
