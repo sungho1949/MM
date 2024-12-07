@@ -1,132 +1,105 @@
-// routesService.js
-
 const Graph = require("../utils/dijkstra");
-const { db } = require("../firebaseConfig");
+const routesDao = require("../dao/routesDao");
+const { convertTime } = require("../utils/timeCalculator");
+const admin = require("firebase-admin");
 
 // 최적 경로 계산
-exports.getOptimalRoute = async (startStation, endStation, criteria) => {
+exports.getOptimalRoute = async (startStation, endStation) => {
   try {
+    const connections = await routesDao.getAllConnections();
     const graph = new Graph();
 
-    // Firestore에서 모든 연결 정보 가져오기
-    const snapshot = await db.collection("Connections").get();
-
-    if (snapshot.empty) {
-      throw new Error("No connections found");
-    }
-
-    // 그래프 데이터 구성
-    snapshot.docs.forEach(doc => {
-      const { startStation, endStation, time, distance, cost } = doc.data();
+    // 그래프 구성
+    connections.forEach(({ startStation, endStation, time, distance, cost }) => {
       graph.addEdge(startStation, endStation, time, distance, cost);
     });
 
-    // 다익스트라 알고리즘으로 최적 경로 계산
-    const optimalRoute = graph.findShortestPath(startStation, endStation, criteria);
+    // 경로 계산
+    const shortestTime = graph.findShortestPath(startStation, endStation, "time");
+    const shortestDistance = graph.findShortestPath(startStation, endStation, "distance");
+    const lowestCost = graph.findShortestPath(startStation, endStation, "cost");
 
-    if (!optimalRoute) {
-      throw new Error("No optimal route found");
-    }
-
-    // 환승 정보 추가
-    const transfers = [];
-    for (let i = 1; i < optimalRoute.path.length; i++) {
-      const prevStation = optimalRoute.path[i - 1];
-      const currentStation = optimalRoute.path[i];
-
-      // Firestore에서 각 역의 노선 정보 가져오기
-      const prevStationDoc = await db.collection("Stations").doc(prevStation).get();
-      const currentStationDoc = await db.collection("Stations").doc(currentStation).get();
-
-      if (prevStationDoc.exists && currentStationDoc.exists) {
-        const prevLines = prevStationDoc.data().lines;
-        const currentLines = currentStationDoc.data().lines;
-
-        // 환승 발생 여부 확인
-        const isTransfer = !prevLines.some(line => currentLines.includes(line));
-        if (isTransfer) {
-          transfers.push(currentStation);
-        }
-      }
-    }
-
-    optimalRoute.transfers = transfers;
-
-    return optimalRoute;
+    // 결과 반환
+    return {
+      shortestTime: {
+        path: shortestTime.path,
+        travelTime: convertTime(shortestTime.time), // 시간 변환
+        totalWeight: shortestTime.time,
+      },
+      shortestDistance: {
+        path: shortestDistance.path,
+        travelTime: convertTime(shortestDistance.distance), // 거리 변환
+        totalWeight: shortestDistance.distance,
+      },
+      lowestCost: {
+        path: lowestCost.path,
+        travelTime: convertTime(lowestCost.cost), // 비용 변환
+        totalWeight: lowestCost.cost,
+      },
+    };
   } catch (error) {
-    throw new Error(`Error calculating optimal route: ${error.message}`);
+    throw new Error(`Error calculating optimal routes: ${error.message}`);
   }
 };
 
-// 사용자가 선택한 경로를 Firestore에 저장
-exports.storeUserSelectedRoute = async (userId, selectedRoute) => {
-  try {
+// 경로 안내 시작
+exports.startRouteGuidance = async (userId, route, criteria) => {
+  const { path, transfers } = route;
 
-    if (!selectedRoute.path || !Array.isArray(selectedRoute.path) || selectedRoute.path.length === 0) {
-      throw new Error("Invalid selected route: Path is missing or invalid");
-    }
-    
-    await db.collection("UserSelectedRoutes").doc(userId).set({
-      selectedRoute,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    throw new Error(`Error storing user selected route: ${error.message}`);
-  }
-};
+  for (let i = 0; i < path.length - 1; i++) {
+    const currentStation = path[i];
+    const nextStation = path[i + 1];
 
-// 사용자에게 경로 안내 및 알림 제공
-exports.provideRouteGuidance = async (userId, selectedRoute) => {
-  try {
-    // 예시: Firebase Cloud Messaging을 사용한 알림
-    const messaging = require("../firebaseConfig").messaging;
+    // 연결 시간 가져오기 및 변환
+    const travelTime = await routesDao.getConnectionTime(currentStation, nextStation);
+    const { hours, minutes, seconds } = convertTime(travelTime);
 
-    // 경로의 모든 역을 순회하며 알림을 제공하거나, 환승 전역, 도착 전역에서만 알림 제공 가능
-    for (let i = 0; i < selectedRoute.path.length - 1; i++) {
-      const currentStation = selectedRoute.path[i];
-      const nextStation = selectedRoute.path[i + 1];
+    // 조건 설정
+    const isFirstStation = i === 0; // 첫 번째 역
+    const isTransfer = transfers.includes(nextStation); // 환승 여부
+    const isLastStation = i === path.length - 2; // 도착 전역 여부
 
-      // 환승 정보가 있을 경우 알림 추가
-      const isTransfer = selectedRoute.transfers && selectedRoute.transfers.includes(nextStation);
-
-      const message = {
+    if (isFirstStation) {
+      // 안내 시작 알림
+      const startMessage = {
         notification: {
-          title: "경로 안내",
-          body: isTransfer ? 
-            `다음 역에서 환승합니다: ${nextStation}` : 
-            `다음 역: ${nextStation}`
+          title: "안내 시작",
+          body: `${criteria} 경로 안내를 시작합니다. 다음 역은 ${nextStation}입니다.`,
         },
-        token: await getUserFCMToken(userId) // 사용자의 FCM 토큰을 가져오는 함수
+        topic: `user_${userId}`,
       };
 
-      await messaging.send(message);
+      admin.messaging().send(startMessage).catch(err => {
+        console.error("Error sending start notification:", err.message);
+      });
+    } else {
+      // 경로 안내 알림
+      setTimeout(() => {
+        let title = "경로 안내";
+        let body = `다음 역은 ${nextStation}입니다.`;
+
+        if (isLastStation) {
+          // 도착 안내 우선
+          title = "도착 안내";
+          body = `다음 역(${nextStation})에서 내리세요.`;
+        } else if (isTransfer) {
+          // 환승 안내
+          title = "환승 안내";
+          body = `다음 역(${nextStation})에서 환승하세요.`;
+        }
+
+        const message = {
+          notification: {
+            title,
+            body,
+          },
+          topic: `user_${userId}`,
+        };
+
+        admin.messaging().send(message).catch(err => {
+          console.error("Error sending notification:", err.message);
+        });
+      }, (hours * 3600 + minutes * 60 + seconds) * 1000); // 지연 시간 계산
     }
-
-    // 도착 전 알림
-    const finalStation = selectedRoute.path[selectedRoute.path.length - 1];
-    const finalMessage = {
-      notification: {
-        title: "도착 안내",
-        body: `곧 도착합니다: ${finalStation}`
-      },
-      token: await getUserFCMToken(userId)
-    };
-
-    await messaging.send(finalMessage);
-  } catch (error) {
-    throw new Error(`Error providing route guidance: ${error.message}`);
-  }
-};
-
-// 사용자 FCM 토큰을 가져오는 함수
-const getUserFCMToken = async (userId) => {
-  try {
-    const userDoc = await db.collection("Users").doc(userId).get();
-    if (!userDoc.exists) {
-      throw new Error("User not found");
-    }
-    return userDoc.data().fcmToken; // 유저의 FCM 토큰 반환
-  } catch (error) {
-    throw new Error(`Error fetching user FCM token: ${error.message}`);
   }
 };

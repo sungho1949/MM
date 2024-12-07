@@ -1,45 +1,43 @@
 const routesService = require("../services/routesService");
 
-// 최적 경로 검색
+// 최적 경로 검색 및 사용자 선택
 exports.searchOptimalRoute = async (req, res) => {
   try {
-    const { startStation, endStation, criteria } = req.body;
+    const { startStation, endStation, criteria, userId } = req.body;
 
-    if (!startStation || !endStation || !criteria) {
+    if (!startStation || !endStation || !criteria || !userId) {
       return res.status(400).send("Missing required information");
     }
 
-    const result = await routesService.getOptimalRoute(startStation, endStation, criteria);
+    // 최적 경로 계산
+    const result = await routesService.getOptimalRoute(startStation, endStation);
 
-    if (!result || !result.path) {
-      return res.status(404).send("No route found");
+    if (!result) {
+      return res.status(404).send("No routes found");
     }
-    
-    res.status(200).json(result);
+
+    res.status(200).json(result); // 경로 정보 반환
   } catch (error) {
-    console.error("Error searching optimal route:", error.message);
-    res.status(500).send(`Error searching optimal route: ${error.message}`);
+    console.error("Error calculating routes:", error.message);
+    res.status(500).send(`Error calculating routes: ${error.message}`);
   }
 };
 
-// 사용자가 선택한 최적 경로를 처리하는 함수
-exports.selectOptimalRoute = async (req, res) => {
+// 사용자 선택 경로 안내 시작
+exports.startRouteGuidance = async (req, res) => {
   try {
-    const { userId, selectedRoute } = req.body;
+    const { userId, selectedRoute, criteria } = req.body;
 
-    if (!userId || !selectedRoute) {
-      return res.status(400).send("User ID and selected route are required");
+    if (!userId || !selectedRoute || !criteria) {
+      return res.status(400).send("Missing required information");
     }
 
-    // 사용자 선택에 따른 경로 저장
-    await routesService.storeUserSelectedRoute(userId, selectedRoute);
+    // 경로 안내 시작
+    await routesService.startRouteGuidance(userId, selectedRoute, criteria);
 
-    // 경로 안내와 알림 제공
-    await routesService.provideRouteGuidance(userId, selectedRoute);
-
-    res.status(200).send("Route selection successful, guidance initiated");
+    res.status(200).send(`Guidance started for ${criteria} route`);
   } catch (error) {
-    console.error("Error processing selected route:", error.message);
-    res.status(500).send(`Error processing selected route: ${error.message}`);
+    console.error("Error starting route guidance:", error.message);
+    res.status(500).send(`Error starting route guidance: ${error.message}`);
   }
 };

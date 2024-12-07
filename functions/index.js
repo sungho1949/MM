@@ -1,27 +1,24 @@
-const functions = require("firebase-functions");
 const express = require("express");
+const cors = require("cors");
 const app = express();
+const { db } = require("./firebaseConfig"); // Firebase Firestore 연결
 
-// Firebase Admin 초기화
-const admin = require("firebase-admin");
-const serviceAccount = require('../firebaseKey.json');
-
-if (!admin.apps || !admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL:"https://metro-map-5f2e7-default-rtdb.asia-southeast1.firebasedatabase.app"
-  });
-}
-
-// 미들웨어 설정
+app.use(cors()); // React Native에서의 CORS 문제 해결
 app.use(express.json());
 
-// 라우트 설정
-const routes = require("./routes");
-app.use("/api", routes); // "/api"로 시작하는 모든 요청을 routes로 연결
+// API 라우트 예제
+app.get("/api/stations", async (req, res) => {
+  try {
+    const stationsSnapshot = await db.collection("Stations").get();
+    const stations = stationsSnapshot.docs.map((doc) => doc.data());
+    res.status(200).json(stations);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching stations" });
+  }
+});
 
-// Firebase Functions 내보내기
-exports.api = functions.https.onRequest(app);
-
-// Express 앱 내보내기 (테스트 용도)
-module.exports = { app };
+// 서버 실행
+const PORT = 3001;
+app.listen(PORT, () => {
+  console.log(`서버 실행 중: http://127.0.0.1:${PORT}`);
+});

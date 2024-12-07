@@ -1,20 +1,4 @@
-// MM/functions/dao/routesDao.js
-
-const admin = require("firebase-admin");
-const db = admin.firestore();
-
-// 모든 역 정보 가져오기
-exports.getAllStations = async () => {
-  try {
-    const snapshot = await db.collection("Stations").get();
-    if (snapshot.empty) {
-      throw new Error("No stations found");
-    }
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  } catch (error) {
-    throw new Error(`Error fetching stations: ${error.message}`);
-  }
-};
+const { db } = require("../firebaseConfig");
 
 // 모든 연결 정보 가져오기
 exports.getAllConnections = async () => {
@@ -29,39 +13,32 @@ exports.getAllConnections = async () => {
   }
 };
 
-// 사용자 사용 기록 업데이트하기
-exports.updateUsageHistory = async (userId, startStation, endStation) => {
+// 특정 연결의 시간 가져오기
+exports.getConnectionTime = async (startStation, endStation) => {
   try {
-    const usageRef = db.collection("UsageHistory").doc(`${userId}_${startStation}_${endStation}`);
-    const usageDoc = await usageRef.get();
+    const snapshot = await db.collection("Connections")
+      .where("startStation", "==", startStation)
+      .where("endStation", "==", endStation)
+      .get();
 
-    if (usageDoc.exists) {
-      const usageData = usageDoc.data();
-      const newCount = usageData.count + 1;
-      await usageRef.update({ count: newCount });
-
-      // 즐겨찾기 자동 추가 조건 확인
-      if (newCount >= 5) {
-        const favoritesRef = db.collection("Favorites").doc(userId);
-        const favoritesDoc = await favoritesRef.get();
-
-        if (favoritesDoc.exists) {
-          const favoritesData = favoritesDoc.data();
-          if (!favoritesData.routes.some(route => route.startStation === startStation && route.endStation === endStation)) {
-            await favoritesRef.update({
-              routes: admin.firestore.FieldValue.arrayUnion({ startStation, endStation })
-            });
-          }
-        } else {
-          await favoritesRef.set({
-            routes: [{ startStation, endStation }]
-          });
-        }
-      }
-    } else {
-      await usageRef.set({ userId, startStation, endStation, count: 1 });
+    if (snapshot.empty) {
+      throw new Error(`No connection found between ${startStation} and ${endStation}`);
     }
+    return snapshot.docs[0].data().time;
   } catch (error) {
-    throw new Error(`Error updating usage history: ${error.message}`);
+    throw new Error(`Error fetching connection time: ${error.message}`);
+  }
+};
+
+// 특정 역의 노선 정보 가져오기
+exports.getStationLines = async (stationID) => {
+  try {
+    const stationDoc = await db.collection("Stations").doc(stationID).get();
+    if (!stationDoc.exists) {
+      throw new Error("Station not found");
+    }
+    return stationDoc.data().lines;
+  } catch (error) {
+    throw new Error(`Error fetching station lines: ${error.message}`);
   }
 };
